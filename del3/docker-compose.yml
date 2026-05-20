@@ -1,0 +1,114 @@
+# Lab 2 — Del 3 Sandbox
+#
+# Builds on Del 2. Same Purdue-style segmentation (it/dmz/ot).
+# What's new:
+#   - real pymodbus PLC + HMI poller producing a continuous Modbus baseline
+#   - Suricata sniffing the OT bridge (af-packet on br-lab3-ot)
+#   - attack scripts the student runs from jump-server to trigger detections
+#
+# Network membership is *already correct* in this sandbox — the bug from
+# Del 2 is fixed. Today's focus is detection, not segmentation.
+
+services:
+  mock-plc:
+    build: ./plc
+    container_name: lab3-plc
+    hostname: mock-plc
+    networks:
+      ot:
+        ipv4_address: 172.31.50.10
+    restart: unless-stopped
+
+  hmi-poller:
+    build: ./hmi
+    container_name: lab3-hmi
+    hostname: hmi-poller
+    depends_on:
+      - mock-plc
+    networks:
+      ot:
+        ipv4_address: 172.31.50.20
+    restart: unless-stopped
+
+  attacker:
+    image: alpine:3.20
+    container_name: lab3-attacker
+    hostname: attacker
+    command: sh -c "apk add --no-cache nmap curl >/dev/null && sleep infinity"
+    networks:
+      it:
+        ipv4_address: 172.31.10.99
+    restart: unless-stopped
+
+  historian:
+    image: alpine:3.20
+    container_name: lab3-historian
+    hostname: historian
+    command: sh -c "apk add --no-cache nmap curl >/dev/null && sleep infinity"
+    networks:
+      dmz:
+        ipv4_address: 172.31.20.30
+      ot:
+        ipv4_address: 172.31.50.30
+    restart: unless-stopped
+
+  jump-server:
+    build: ./jump
+    container_name: lab3-jump
+    hostname: jump-server
+    networks:
+      it:
+        ipv4_address: 172.31.10.10
+      dmz:
+        ipv4_address: 172.31.20.10
+      ot:
+        ipv4_address: 172.31.50.99
+    ports:
+      - "127.0.0.1:2222:22"
+    volumes:
+      - ./scripts:/scripts:ro
+    restart: unless-stopped
+
+  suricata:
+    image: jasonish/suricata:latest
+    container_name: lab3-suricata
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    volumes:
+      - ./suricata.yaml:/etc/suricata/suricata.yaml
+      - ./rules:/var/lib/suricata/rules
+      - ./suricata-logs:/var/log/suricata
+    # Skip the upstream entrypoint (which tries to chown mounted files —
+    # fails on macOS bind mounts). Run suricata as root directly.
+    entrypoint: ["/usr/bin/suricata"]
+    command: -c /etc/suricata/suricata.yaml -i br-lab3-ot -v
+    depends_on:
+      - mock-plc
+    restart: unless-stopped
+
+networks:
+  it:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-lab3-it
+    ipam:
+      config:
+        - subnet: 172.31.10.0/24
+  dmz:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-lab3-dmz
+    ipam:
+      config:
+        - subnet: 172.31.20.0/24
+  ot:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-lab3-ot
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.50.0/24

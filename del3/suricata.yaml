@@ -1,0 +1,70 @@
+%YAML 1.1
+---
+# Lab 2 Del 3 — minimal Suricata config
+#
+# Listens on the OT Docker bridge (br-lab3-ot) using af-packet.
+# Modbus app-layer parser is enabled so rules can match FC codes.
+
+vars:
+  address-groups:
+    IT_NET: "[172.31.10.0/24]"
+    DMZ_NET: "[172.31.20.0/24]"
+    OT_NET: "[172.31.50.0/24]"
+    HOME_NET: "[172.31.10.0/24,172.31.20.0/24,172.31.50.0/24]"
+    EXTERNAL_NET: "!$HOME_NET"
+  port-groups:
+    HTTP_PORTS: "80"
+    MODBUS_PORTS: "502"
+
+default-log-dir: /var/log/suricata/
+
+stats:
+  enabled: yes
+  interval: 60
+
+outputs:
+  - fast:
+      enabled: yes
+      filename: fast.log
+      append: yes
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - alert:
+            payload: yes
+            payload-printable: yes
+        - flow
+        - dns
+        - modbus:
+            stream: yes
+
+app-layer:
+  protocols:
+    modbus:
+      enabled: yes
+      detection-ports:
+        dp: 502
+    http:
+      enabled: yes
+    tls:
+      enabled: yes
+
+af-packet:
+  - interface: br-lab3-ot
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+
+default-rule-path: /var/lib/suricata/rules
+rule-files:
+  - ot.rules
+
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: yes
