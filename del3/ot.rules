@@ -1,0 +1,36 @@
+# OT - Modbus session detection
+alert tcp any any -> $HOME_NET 502 (
+    msg:"OT-SESSION: Modbus TCP session";
+    sid:2001000;
+    rev:1;
+)
+
+# FC6 - write single register
+alert tcp any any -> $HOME_NET 502 (
+    msg:"OT-WRITE: FC6 Write Single Register";
+    sid:2000006;
+    rev:1;
+)
+
+# FC5 - force coil
+alert tcp any any -> $HOME_NET 502 (
+    msg:"OT-WRITE: FC5 Force Single Coil";
+    sid:2000005;
+    rev:1;
+)
+
+# FC16 - multiple registers
+alert tcp any any -> $HOME_NET 502 (
+    msg:"OT-WRITE-CRITICAL: FC16 Bulk Write";
+    sid:2000016;
+    rev:1;
+)
+
+alert tcp any any -> $HOME_NET 502 (
+    msg:"OT-RECON: suspicious Modbus scanning";
+    flow:to_server;
+    flags:S;
+    threshold: type both, track by_src, count 10, seconds 5;
+    sid:1000200;
+    rev:1;
+)
